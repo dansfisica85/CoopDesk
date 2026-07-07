@@ -1,9 +1,11 @@
 using CoopDesk.Application.Dtos;
 using CoopDesk.Application.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CoopDesk.Api.Controllers;
 
+[Authorize]
 [ApiController]
 [Route("api/reference-data")]
 public sealed class ReferenceDataController(IReferenceDataService referenceDataService) : ControllerBase

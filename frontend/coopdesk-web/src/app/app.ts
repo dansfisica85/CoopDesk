@@ -1,11 +1,12 @@
 import { CommonModule } from '@angular/common';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
 
 type TicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 type TicketStatus = 'Open' | 'InProgress' | 'WaitingBusiness' | 'Resolved' | 'Closed' | 'Canceled';
+type UserRole = 'Administrator' | 'Agent' | 'Requester';
 
 interface LookupItem {
   id: string;
@@ -24,6 +25,19 @@ interface TicketSummary {
   dueAtUtc?: string | null;
 }
 
+interface AuthenticatedUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: UserRole;
+}
+
+interface LoginResponse {
+  accessToken: string;
+  expiresAtUtc: string;
+  user: AuthenticatedUser;
+}
+
 @Component({
   selector: 'app-root',
   imports: [CommonModule, FormsModule],
@@ -32,17 +46,30 @@ interface TicketSummary {
 })
 export class App implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly storageKey = 'coopdesk.auth';
 
   apiBase = 'http://localhost:5298';
   loading = false;
-  message = 'Pronto';
+  message = 'Informe suas credenciais';
+  authToken = '';
+  currentUser?: AuthenticatedUser;
 
   readonly priorities: TicketPriority[] = ['Low', 'Medium', 'High', 'Critical'];
   readonly statuses: TicketStatus[] = ['Open', 'InProgress', 'WaitingBusiness', 'Resolved', 'Closed', 'Canceled'];
+  readonly demoUsers = [
+    { label: 'Admin', email: 'admin@coopdesk.local' },
+    { label: 'Atendente', email: 'atendente@coopdesk.local' },
+    { label: 'Solicitante', email: 'solicitante@coopdesk.local' }
+  ];
 
   tickets: TicketSummary[] = [];
   departments: LookupItem[] = [];
   collaborators: LookupItem[] = [];
+
+  loginForm = {
+    email: 'atendente@coopdesk.local',
+    password: 'Demo@12345'
+  };
 
   filters = {
     status: '',
@@ -60,8 +87,19 @@ export class App implements OnInit {
   };
 
   ngOnInit(): void {
-    void this.loadReferenceData();
-    void this.loadTickets();
+    this.restoreSession();
+
+    if (this.isAuthenticated) {
+      void this.loadInitialData();
+    }
+  }
+
+  get isAuthenticated(): boolean {
+    return Boolean(this.authToken && this.currentUser);
+  }
+
+  get canManageTickets(): boolean {
+    return this.currentUser?.role === 'Administrator' || this.currentUser?.role === 'Agent';
   }
 
   get openTickets(): number {
@@ -76,11 +114,58 @@ export class App implements OnInit {
     return this.tickets.filter(ticket => ticket.status === 'InProgress').length;
   }
 
+  async login(): Promise<void> {
+    if (!this.loginForm.email.trim() || !this.loginForm.password.trim()) {
+      this.message = 'Informe e-mail e senha.';
+      return;
+    }
+
+    this.loading = true;
+
+    try {
+      const response = await firstValueFrom(this.http.post<LoginResponse>(this.url('api/auth/login'), {
+        email: this.loginForm.email,
+        password: this.loginForm.password
+      }));
+
+      this.authToken = response.accessToken;
+      this.currentUser = response.user;
+      localStorage.setItem(this.storageKey, JSON.stringify(response));
+      this.message = `Sessao iniciada como ${response.user.fullName}.`;
+      await this.loadInitialData();
+    } catch (error) {
+      this.setError('E-mail ou senha invalidos.', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  async useDemo(email: string): Promise<void> {
+    this.loginForm.email = email;
+    this.loginForm.password = 'Demo@12345';
+    await this.login();
+  }
+
+  logout(): void {
+    this.authToken = '';
+    this.currentUser = undefined;
+    this.tickets = [];
+    this.departments = [];
+    this.collaborators = [];
+    localStorage.removeItem(this.storageKey);
+    this.message = 'Sessao encerrada.';
+  }
+
+  async loadInitialData(): Promise<void> {
+    await this.loadReferenceData();
+    await this.loadTickets();
+  }
+
   async loadReferenceData(): Promise<void> {
     try {
       const [departments, collaborators] = await Promise.all([
-        firstValueFrom(this.http.get<LookupItem[]>(this.url('api/reference-data/departments'))),
-        firstValueFrom(this.http.get<LookupItem[]>(this.url('api/reference-data/collaborators')))
+        firstValueFrom(this.http.get<LookupItem[]>(this.url('api/reference-data/departments'), { headers: this.authHeaders() })),
+        firstValueFrom(this.http.get<LookupItem[]>(this.url('api/reference-data/collaborators'), { headers: this.authHeaders() }))
       ]);
 
       this.departments = departments ?? [];
@@ -114,7 +199,7 @@ export class App implements OnInit {
         params = params.set('search', this.filters.search.trim());
       }
 
-      this.tickets = await firstValueFrom(this.http.get<TicketSummary[]>(this.url('api/tickets'), { params }));
+      this.tickets = await firstValueFrom(this.http.get<TicketSummary[]>(this.url('api/tickets'), { params, headers: this.authHeaders() }));
       this.message = `${this.tickets.length} chamado(s) carregado(s)`;
     } catch (error) {
       this.setError('Nao foi possivel carregar chamados.', error);
@@ -137,7 +222,7 @@ export class App implements OnInit {
         requesterId: this.newTicket.requesterId,
         departmentId: this.newTicket.departmentId,
         dueAtUtc: null
-      }));
+      }, { headers: this.authHeaders() }));
 
       this.newTicket.title = '';
       this.newTicket.description = '';
@@ -149,12 +234,17 @@ export class App implements OnInit {
   }
 
   async changeStatus(ticket: TicketSummary, status: TicketStatus): Promise<void> {
+    if (!this.canManageTickets) {
+      this.message = 'Seu perfil permite abrir e consultar chamados.';
+      return;
+    }
+
     try {
       await firstValueFrom(this.http.patch(this.url(`api/tickets/${ticket.id}/status`), {
         status,
         notes: `Status alterado pelo Angular para ${status}.`,
-        performedBy: 'angular-web'
-      }));
+        performedBy: this.currentUser?.fullName ?? 'angular-web'
+      }, { headers: this.authHeaders() }));
 
       this.message = `Chamado atualizado para ${this.statusLabel(status)}.`;
       await this.loadTickets();
@@ -187,12 +277,54 @@ export class App implements OnInit {
     return labels[priority];
   }
 
+  roleLabel(role?: UserRole): string {
+    const labels: Record<UserRole, string> = {
+      Administrator: 'Administrador',
+      Agent: 'Atendente',
+      Requester: 'Solicitante'
+    };
+
+    return role ? labels[role] : '';
+  }
+
   private url(path: string): string {
     return `${this.apiBase.trim().replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
   }
 
+  private authHeaders(): HttpHeaders {
+    return new HttpHeaders({ Authorization: `Bearer ${this.authToken}` });
+  }
+
+  private restoreSession(): void {
+    const raw = localStorage.getItem(this.storageKey);
+    if (!raw) {
+      return;
+    }
+
+    try {
+      const session = JSON.parse(raw) as LoginResponse;
+      if (!session.accessToken || new Date(session.expiresAtUtc).getTime() <= Date.now()) {
+        this.logout();
+        return;
+      }
+
+      this.authToken = session.accessToken;
+      this.currentUser = session.user;
+      this.message = `Sessao restaurada para ${session.user.fullName}.`;
+    } catch {
+      this.logout();
+    }
+  }
+
   private setError(message: string, error: unknown): void {
     console.error(message, error);
+
+    if (error instanceof HttpErrorResponse && (error.status === 401 || error.status === 403)) {
+      this.logout();
+      this.message = 'Acesso negado ou sessao expirada.';
+      return;
+    }
+
     this.message = message;
   }
 }

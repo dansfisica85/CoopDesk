@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -17,6 +18,9 @@ public partial class Form1 : Form
     private readonly BindingSource _ticketsBindingSource = new();
 
     private readonly TextBox _apiBaseTextBox = new() { Text = "http://localhost:5298", Width = 220 };
+    private readonly TextBox _emailTextBox = new() { Text = "atendente@coopdesk.local", Width = 180 };
+    private readonly TextBox _passwordTextBox = new() { Text = "Demo@12345", UseSystemPasswordChar = true, Width = 110 };
+    private readonly Label _sessionLabel = new() { Text = "Sessao: nao autenticada", AutoSize = true, Padding = new Padding(0, 8, 0, 0) };
     private readonly DataGridView _ticketsGrid = new();
     private readonly ComboBox _requesterComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _departmentComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -29,7 +33,13 @@ public partial class Form1 : Form
     {
         InitializeComponent();
         BuildLayout();
-        Shown += async (_, _) => await LoadInitialDataAsync();
+        Shown += async (_, _) =>
+        {
+            if (await LoginAsync())
+            {
+                await LoadInitialDataAsync();
+            }
+        };
     }
 
     private void BuildLayout()
@@ -61,6 +71,15 @@ public partial class Form1 : Form
         var refreshButton = new Button { Text = "Atualizar", Width = 100 };
         refreshButton.Click += async (_, _) => await LoadTicketsAsync();
 
+        var loginButton = new Button { Text = "Entrar", Width = 80 };
+        loginButton.Click += async (_, _) =>
+        {
+            if (await LoginAsync())
+            {
+                await LoadInitialDataAsync();
+            }
+        };
+
         var startButton = new Button { Text = "Atender", Width = 90 };
         startButton.Click += async (_, _) => await ChangeSelectedTicketStatusAsync(TicketStatus.InProgress, "Atendimento iniciado pelo legado WinForms.");
 
@@ -73,10 +92,16 @@ public partial class Form1 : Form
         toolbar.Controls.AddRange([
             new Label { Text = "API:", AutoSize = true, Padding = new Padding(0, 8, 0, 0) },
             _apiBaseTextBox,
+            new Label { Text = "E-mail:", AutoSize = true, Padding = new Padding(0, 8, 0, 0) },
+            _emailTextBox,
+            new Label { Text = "Senha:", AutoSize = true, Padding = new Padding(0, 8, 0, 0) },
+            _passwordTextBox,
+            loginButton,
             refreshButton,
             startButton,
             resolveButton,
-            closeButton
+            closeButton,
+            _sessionLabel
         ]);
 
         ConfigureGrid();
@@ -164,6 +189,35 @@ public partial class Form1 : Form
     {
         await LoadReferenceDataAsync();
         await LoadTicketsAsync();
+    }
+
+    private async Task<bool> LoginAsync()
+    {
+        try
+        {
+            var request = new LoginRequest(_emailTextBox.Text, _passwordTextBox.Text);
+            using var response = await _httpClient.PostAsJsonAsync(BuildUri("api/auth/login"), request, _jsonOptions);
+            response.EnsureSuccessStatusCode();
+
+            var auth = await response.Content.ReadFromJsonAsync<AuthResponseDto>(_jsonOptions);
+            if (auth is null)
+            {
+                SetStatus("Resposta de autenticacao invalida.");
+                return false;
+            }
+
+            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+            _sessionLabel.Text = $"Sessao: {auth.User.FullName} ({auth.User.Role})";
+            SetStatus("Sessao autenticada.");
+            return true;
+        }
+        catch (Exception exception)
+        {
+            _httpClient.DefaultRequestHeaders.Authorization = null;
+            _sessionLabel.Text = "Sessao: nao autenticada";
+            SetStatus($"Nao foi possivel autenticar: {exception.Message}");
+            return false;
+        }
     }
 
     private async Task LoadReferenceDataAsync()

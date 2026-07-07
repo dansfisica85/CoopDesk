@@ -8,6 +8,7 @@ public sealed class CoopDeskDbContext(DbContextOptions<CoopDeskDbContext> option
 {
     public DbSet<Department> Departments => Set<Department>();
     public DbSet<Collaborator> Collaborators => Set<Collaborator>();
+    public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<TicketHistory> TicketHistories => Set<TicketHistory>();
 
@@ -17,6 +18,7 @@ public sealed class CoopDeskDbContext(DbContextOptions<CoopDeskDbContext> option
 
         ConfigureDepartments(modelBuilder);
         ConfigureCollaborators(modelBuilder);
+        ConfigureUsers(modelBuilder);
         ConfigureTickets(modelBuilder);
         ConfigureTicketHistories(modelBuilder);
         Seed(modelBuilder);
@@ -50,6 +52,28 @@ public sealed class CoopDeskDbContext(DbContextOptions<CoopDeskDbContext> option
                 .HasOne(collaborator => collaborator.Department)
                 .WithMany()
                 .HasForeignKey(collaborator => collaborator.DepartmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+    }
+
+    private static void ConfigureUsers(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<AppUser>(builder =>
+        {
+            builder.ToTable("Users");
+            builder.HasKey(user => user.Id);
+            builder.Property(user => user.FullName).HasMaxLength(160).IsRequired();
+            builder.Property(user => user.Email).HasMaxLength(180).IsRequired();
+            builder.HasIndex(user => user.Email).IsUnique();
+            builder.Property(user => user.PasswordHash).HasMaxLength(220).IsRequired();
+            builder.Property(user => user.Role).HasConversion<string>().HasMaxLength(32).IsRequired();
+            builder.Property(user => user.IsActive).IsRequired();
+            builder.Property(user => user.CreatedAtUtc).IsRequired();
+
+            builder
+                .HasOne(user => user.Collaborator)
+                .WithMany()
+                .HasForeignKey(user => user.CollaboratorId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }
@@ -121,6 +145,10 @@ public sealed class CoopDeskDbContext(DbContextOptions<CoopDeskDbContext> option
         var brunoId = Guid.Parse("fb7c7217-6d70-4a56-857e-bfdb87170c2e");
         var carlaId = Guid.Parse("a471f67e-03ab-4d81-a4cd-53b903a59e7f");
 
+        var adminUserId = Guid.Parse("40d30e39-4c09-4108-90f2-64895c8ae701");
+        var agentUserId = Guid.Parse("03c7b3fb-c8f2-4a4f-8b6d-070c2f738702");
+        var requesterUserId = Guid.Parse("35e626a2-f4cc-4072-a2cd-a1437e255703");
+
         var ticketId = Guid.Parse("e4fd358e-b413-4a3e-aa5d-419112995001");
         var createdAt = new DateTime(2026, 7, 7, 12, 0, 0, DateTimeKind.Utc);
 
@@ -133,6 +161,44 @@ public sealed class CoopDeskDbContext(DbContextOptions<CoopDeskDbContext> option
             new { Id = anaId, FullName = "Ana Souza", Email = "ana.souza@coopdesk.local", DepartmentId = operationsId, IsActive = true, CreatedAtUtc = createdAt, UpdatedAtUtc = (DateTime?)null },
             new { Id = brunoId, FullName = "Bruno Lima", Email = "bruno.lima@coopdesk.local", DepartmentId = technologyId, IsActive = true, CreatedAtUtc = createdAt, UpdatedAtUtc = (DateTime?)null },
             new { Id = carlaId, FullName = "Carla Mendes", Email = "carla.mendes@coopdesk.local", DepartmentId = creditId, IsActive = true, CreatedAtUtc = createdAt, UpdatedAtUtc = (DateTime?)null });
+
+        modelBuilder.Entity<AppUser>().HasData(
+            new
+            {
+                Id = adminUserId,
+                FullName = "Administrador Demo",
+                Email = "admin@coopdesk.local",
+                PasswordHash = "PBKDF2$100000$BmILyUgJIjH4aZwOXR5ozA==$rOnI6VqfnVp51b9MaK7dA5myVY8P03lUFCicYddbN98=",
+                Role = UserRole.Administrator,
+                CollaboratorId = (Guid?)null,
+                IsActive = true,
+                CreatedAtUtc = createdAt,
+                UpdatedAtUtc = (DateTime?)null
+            },
+            new
+            {
+                Id = agentUserId,
+                FullName = "Bruno Lima",
+                Email = "atendente@coopdesk.local",
+                PasswordHash = "PBKDF2$100000$UToCSteUYZ2ZuMONaNTlvA==$OwHgBWAAwjySiIcl1by4wg4PtfyZGHUllBiwVgct2aA=",
+                Role = UserRole.Agent,
+                CollaboratorId = (Guid?)brunoId,
+                IsActive = true,
+                CreatedAtUtc = createdAt,
+                UpdatedAtUtc = (DateTime?)null
+            },
+            new
+            {
+                Id = requesterUserId,
+                FullName = "Carla Mendes",
+                Email = "solicitante@coopdesk.local",
+                PasswordHash = "PBKDF2$100000$JMPytRZJ0LrGtuWOXOrv/A==$2X7sRd5DlKsO98uSlJ19UtCBZ4DZAjiBrWdwQxg+JjA=",
+                Role = UserRole.Requester,
+                CollaboratorId = (Guid?)carlaId,
+                IsActive = true,
+                CreatedAtUtc = createdAt,
+                UpdatedAtUtc = (DateTime?)null
+            });
 
         modelBuilder.Entity<Ticket>().HasData(new
         {

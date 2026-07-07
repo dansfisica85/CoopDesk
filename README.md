@@ -34,6 +34,10 @@ O projeto foi pensado para contar uma historia tecnica clara em entrevista:
 - Listar colaboradores ativos.
 - Persistir dados em SQL Server LocalDB.
 - Expor operacoes por API REST.
+- Autenticar usuarios com e-mail e senha.
+- Emitir token JWT para clientes autenticados.
+- Proteger endpoints com `Authorization: Bearer`.
+- Controlar permissoes por perfil: `Administrator`, `Agent` e `Requester`.
 - Consumir a mesma API por Windows Forms.
 - Consumir a mesma API por Angular.
 - Validar regras de negocio com testes unitarios.
@@ -44,8 +48,9 @@ O projeto foi pensado para contar uma historia tecnica clara em entrevista:
 - Comentarios internos no chamado.
 - Anexos.
 - SLA por prioridade.
-- Autenticacao e autorizacao por perfil.
-- Perfis como solicitante, atendente, gestor e administrador.
+- Cadastro administrativo de usuarios.
+- Recuperacao e troca de senha.
+- Perfil gestor com indicadores por equipe.
 - Dashboard gerencial com indicadores.
 - Relatorios por area, status, prioridade e periodo.
 - Auditoria completa de alteracoes.
@@ -85,6 +90,8 @@ O CoopDesk foi construido para cobrir esses pontos em uma aplicacao pequena, mas
 - Injecao de dependencia.
 - Controllers REST.
 - DTOs.
+- Autenticacao JWT Bearer.
+- Hash de senha com PBKDF2.
 - Middleware de tratamento de excecoes.
 
 ### Front-end web
@@ -95,6 +102,7 @@ O CoopDesk foi construido para cobrir esses pontos em uma aplicacao pequena, mas
 - SCSS.
 - HttpClient.
 - FormsModule.
+- Login com armazenamento local de token.
 
 ### Desktop
 
@@ -102,6 +110,7 @@ O CoopDesk foi construido para cobrir esses pontos em uma aplicacao pequena, mas
 - C#.
 - HttpClient.
 - DataGridView.
+- Login na API com token JWT.
 
 ### Testes
 
@@ -123,12 +132,14 @@ CoopDesk/
     CoopDesk.Api/
       Controllers/
       Middleware/
+      Security/
       Program.cs
       appsettings.json
 
     CoopDesk.Application/
       Dtos/
       Interfaces/
+      Security/
       Services/
 
     CoopDesk.Domain/
@@ -139,6 +150,7 @@ CoopDesk/
     CoopDesk.Infrastructure/
       Persistence/
       Repositories/
+      Security/
       DependencyInjection.cs
 
   desktop/
@@ -158,6 +170,7 @@ CoopDesk/
 
   tests/
     CoopDesk.Tests/
+      AuthServiceTests.cs
       TicketServiceTests.cs
 
   docs/
@@ -191,14 +204,17 @@ Principais arquivos:
 - `TicketHistory.cs`
 - `Collaborator.cs`
 - `Department.cs`
+- `AppUser.cs`
 - `TicketPriority.cs`
 - `TicketStatus.cs`
+- `UserRole.cs`
 
 Exemplo de regra:
 
 - Um chamado fechado ou cancelado nao pode ser editado.
 - Toda mudanca de status gera historico.
 - Todo chamado nasce com status `Open`.
+- Usuarios possuem perfil de acesso definido por `UserRole`.
 
 ### CoopDesk.Application
 
@@ -214,10 +230,15 @@ Responsabilidades:
 Principais arquivos:
 
 - `TicketService.cs`
+- `AuthService.cs`
 - `ReferenceDataService.cs`
 - `ITicketService.cs`
+- `IAuthService.cs`
 - `ITicketRepository.cs`
+- `IUserRepository.cs`
 - `CreateTicketRequest.cs`
+- `LoginRequest.cs`
+- `AuthResponseDto.cs`
 - `TicketSummaryDto.cs`
 - `TicketDetailDto.cs`
 
@@ -241,6 +262,8 @@ Principais arquivos:
 - `CoopDeskDbContextFactory.cs`
 - `TicketRepository.cs`
 - `ReferenceDataRepository.cs`
+- `UserRepository.cs`
+- `Pbkdf2PasswordHashService.cs`
 
 ### CoopDesk.Api
 
@@ -252,11 +275,14 @@ Responsabilidades:
 - Validar entrada basica.
 - Chamar services da camada Application.
 - Retornar respostas HTTP.
+- Emitir e validar tokens JWT.
+- Aplicar autorizacao por perfil.
 - Centralizar tratamento de erros.
 
 Principais controllers:
 
 - `TicketsController`
+- `AuthController`
 - `ReferenceDataController`
 - `HealthController`
 
@@ -267,7 +293,9 @@ Cliente desktop que simula a aplicacao legada.
 Responsabilidades:
 
 - Permitir operacao basica de chamados via Windows Forms.
+- Autenticar um usuario demo na API.
 - Consumir a API por HTTP.
+- Enviar token JWT nas chamadas protegidas.
 - Demonstrar uma migracao gradual de legado.
 
 Importante: neste projeto, o WinForms nao acessa o banco diretamente. Ele usa a API. Essa escolha mostra uma estrategia de modernizacao segura: manter o desktop, mas mover regra e persistencia para o back-end.
@@ -279,6 +307,7 @@ Cliente Angular moderno.
 Responsabilidades:
 
 - Exibir dashboard simples de chamados.
+- Autenticar usuario e manter sessao local.
 - Filtrar chamados.
 - Abrir chamado.
 - Alterar status.
@@ -292,6 +321,7 @@ Tabelas:
 
 - `Departments`
 - `Collaborators`
+- `Users`
 - `Tickets`
 - `TicketHistories`
 
@@ -301,21 +331,40 @@ Relacionamentos:
 - Um chamado possui um solicitante.
 - Um chamado pode possuir um responsavel.
 - Um chamado possui varios registros de historico.
+- Um usuario pode estar associado a um colaborador.
 
 Enums persistidos como texto:
 
 - `TicketPriority`
 - `TicketStatus`
+- `UserRole`
 
 Essa escolha facilita leitura direta no SQL Server durante suporte e troubleshooting.
 
+As senhas dos usuarios demo nao sao gravadas em texto puro. Elas ficam persistidas como hash PBKDF2 no formato:
+
+```text
+PBKDF2$iteracoes$saltBase64$hashBase64
+```
+
 ## Fluxo de trabalho da aplicacao
 
-### Fluxo 1: abertura de chamado
+### Fluxo 1: autenticacao
 
 1. Usuario acessa o Angular ou o WinForms.
-2. Usuario informa titulo, descricao, prioridade, solicitante e area.
-3. Cliente envia `POST /api/tickets`.
+2. Usuario informa e-mail e senha.
+3. Cliente envia `POST /api/auth/login`.
+4. `AuthService` localiza o usuario por e-mail.
+5. `Pbkdf2PasswordHashService` valida a senha contra o hash salvo no SQL Server.
+6. `JwtTokenService` emite um token JWT com nome, e-mail e perfil.
+7. Cliente salva o token durante a sessao.
+8. Chamadas seguintes enviam `Authorization: Bearer {token}`.
+
+### Fluxo 2: abertura de chamado
+
+1. Usuario autenticado informa titulo, descricao, prioridade, solicitante e area.
+2. Cliente envia `POST /api/tickets` com token JWT.
+3. API valida o token.
 4. API recebe `CreateTicketRequest`.
 5. `TicketService` cria a entidade `Ticket`.
 6. `Ticket` nasce com status `Open`.
@@ -324,29 +373,31 @@ Essa escolha facilita leitura direta no SQL Server durante suporte e troubleshoo
 9. API retorna `201 Created`.
 10. Cliente atualiza a listagem.
 
-### Fluxo 2: listagem de chamados
+### Fluxo 3: listagem de chamados
 
-1. Cliente chama `GET /api/tickets`.
-2. API recebe filtros opcionais.
-3. `TicketRepository` monta a consulta.
-4. EF Core busca dados no SQL Server.
-5. Application converte entidade para `TicketSummaryDto`.
-6. API retorna lista de chamados.
-7. Cliente exibe os dados em tabela.
+1. Cliente chama `GET /api/tickets` com token JWT.
+2. API valida o token.
+3. API recebe filtros opcionais.
+4. `TicketRepository` monta a consulta.
+5. EF Core busca dados no SQL Server.
+6. Application converte entidade para `TicketSummaryDto`.
+7. API retorna lista de chamados.
+8. Cliente exibe os dados em tabela.
 
-### Fluxo 3: alteracao de status
+### Fluxo 4: alteracao de status
 
-1. Usuario seleciona um chamado.
+1. Usuario com perfil `Administrator` ou `Agent` seleciona um chamado.
 2. Usuario escolhe atender, resolver ou fechar.
-3. Cliente envia `PATCH /api/tickets/{id}/status`.
-4. API recebe `ChangeTicketStatusRequest`.
-5. `TicketService` busca o chamado.
-6. Entidade `Ticket` aplica a mudanca de status.
-7. Entidade cria novo `TicketHistory`.
-8. Repository salva a alteracao.
-9. Cliente recarrega a lista.
+3. Cliente envia `PATCH /api/tickets/{id}/status` com token JWT.
+4. API valida token e perfil.
+5. API recebe `ChangeTicketStatusRequest`.
+6. `TicketService` busca o chamado.
+7. Entidade `Ticket` aplica a mudanca de status.
+8. Entidade cria novo `TicketHistory`.
+9. Repository salva a alteracao.
+10. Cliente recarrega a lista.
 
-### Fluxo 4: suporte ao legado
+### Fluxo 5: suporte ao legado
 
 1. A equipe continua usando o WinForms.
 2. O WinForms passa a consumir a API.
@@ -356,6 +407,12 @@ Essa escolha facilita leitura direta no SQL Server durante suporte e troubleshoo
 
 ## Endpoints
 
+Com excecao de `GET /api/health` e `POST /api/auth/login`, os endpoints exigem:
+
+```http
+Authorization: Bearer {accessToken}
+```
+
 ### Health check
 
 ```http
@@ -363,6 +420,41 @@ GET /api/health
 ```
 
 Retorna o status basico da API.
+
+### Autenticacao
+
+```http
+POST /api/auth/login
+```
+
+Exemplo:
+
+```json
+{
+  "email": "atendente@coopdesk.local",
+  "password": "Demo@12345"
+}
+```
+
+Resposta resumida:
+
+```json
+{
+  "accessToken": "jwt...",
+  "expiresAtUtc": "2026-07-08T00:40:44Z",
+  "user": {
+    "fullName": "Bruno Lima",
+    "email": "atendente@coopdesk.local",
+    "role": "Agent"
+  }
+}
+```
+
+```http
+GET /api/auth/me
+```
+
+Retorna o usuario autenticado a partir do token.
 
 ### Chamados
 
@@ -408,19 +500,19 @@ Exemplo:
 PUT /api/tickets/{id}
 ```
 
-Atualiza dados principais do chamado.
+Atualiza dados principais do chamado. Requer perfil `Administrator` ou `Agent`.
 
 ```http
 PATCH /api/tickets/{id}/assignment
 ```
 
-Atribui ou remove responsavel.
+Atribui ou remove responsavel. Requer perfil `Administrator` ou `Agent`.
 
 ```http
 PATCH /api/tickets/{id}/status
 ```
 
-Altera status do chamado.
+Altera status do chamado. Requer perfil `Administrator` ou `Agent`.
 
 Exemplo:
 
@@ -436,7 +528,7 @@ Exemplo:
 DELETE /api/tickets/{id}
 ```
 
-Remove chamado.
+Remove chamado. Requer perfil `Administrator` ou `Agent`.
 
 ### Dados de referencia
 
@@ -457,12 +549,14 @@ Lista colaboradores.
 ### Pre-requisitos
 
 - Visual Studio instalado.
-- .NET SDK instalado.
+- .NET SDK 10 instalado.
 - SQL Server LocalDB.
 - Node.js.
 - pnpm.
 
 ### Banco de dados
+
+Nao e necessario instalar um SQL Server completo para testar localmente. O projeto usa SQL Server LocalDB por padrao, que normalmente e instalado junto com o Visual Studio.
 
 Por padrao, a API usa:
 
@@ -472,18 +566,55 @@ Server=(localdb)\mssqllocaldb;Database=CoopDeskDb;Trusted_Connection=True;Multip
 
 A primeira execucao da API cria o banco automaticamente com `EnsureCreated`.
 
+Se voce ja rodou uma versao antiga do projeto sem autenticacao, a API de desenvolvimento detecta o schema antigo e recria o banco `CoopDeskDb` automaticamente. Isso e proposital para facilitar a execucao local do portfolio.
+
+Para usar SQL Server Express ou uma instancia remota, altere a connection string `ConnectionStrings:CoopDesk` em:
+
+```text
+backend/CoopDesk.Api/appsettings.json
+```
+
+### Usuarios demo
+
+Todos os usuarios abaixo usam a senha:
+
+```text
+Demo@12345
+```
+
+| Perfil | E-mail | Permissoes |
+| --- | --- | --- |
+| Administrador | `admin@coopdesk.local` | Consulta, criacao, edicao, status, atribuicao e exclusao |
+| Atendente | `atendente@coopdesk.local` | Consulta, criacao, edicao, status e atribuicao |
+| Solicitante | `solicitante@coopdesk.local` | Consulta e abertura de chamados |
+
 ### Rodar API
 
 Na raiz do repositorio:
 
 ```powershell
-dotnet run --project backend/CoopDesk.Api/CoopDesk.Api.csproj --urls http://localhost:5298
+dotnet run --project backend/CoopDesk.Api/CoopDesk.Api.csproj --launch-profile http
 ```
 
 Teste:
 
 ```powershell
 Invoke-RestMethod http://localhost:5298/api/health
+```
+
+Teste de login:
+
+```powershell
+$body = @{ email = "atendente@coopdesk.local"; password = "Demo@12345" } | ConvertTo-Json
+$auth = Invoke-RestMethod -Uri "http://localhost:5298/api/auth/login" -Method Post -Body $body -ContentType "application/json"
+$auth.user
+```
+
+Teste de endpoint protegido:
+
+```powershell
+$headers = @{ Authorization = "Bearer $($auth.accessToken)" }
+Invoke-RestMethod -Uri "http://localhost:5298/api/tickets" -Headers $headers
 ```
 
 ### Rodar Windows Forms
@@ -500,6 +631,15 @@ No Visual Studio:
 2. Clique em `Definir como Projeto de Inicializacao`.
 3. Garanta que a API esta rodando em `http://localhost:5298`.
 4. Pressione `Ctrl+F5`.
+
+O WinForms ja vem preenchido com:
+
+```text
+atendente@coopdesk.local
+Demo@12345
+```
+
+Ele autentica na API e usa o token JWT nas chamadas seguintes.
 
 ### Rodar Angular
 
@@ -520,6 +660,8 @@ O Angular espera a API em:
 ```text
 http://localhost:5298
 ```
+
+Na tela de login, use um dos botoes de perfil demo ou informe manualmente um dos usuarios listados neste README.
 
 ## Como validar
 
@@ -580,6 +722,7 @@ Entidades principais:
 - Historico de chamado.
 - Colaborador.
 - Departamento.
+- Usuario.
 
 ### Etapa 3: criacao da solution
 
@@ -600,11 +743,13 @@ Foram criadas entidades com regras internas:
 - `TicketHistory`
 - `Collaborator`
 - `Department`
+- `AppUser`
 
 Tambem foram criados enums:
 
 - `TicketPriority`
 - `TicketStatus`
+- `UserRole`
 
 ### Etapa 5: criacao da camada Application
 
@@ -635,19 +780,29 @@ Foram configurados:
 Foram criados controllers REST:
 
 - `TicketsController`
+- `AuthController`
 - `ReferenceDataController`
 - `HealthController`
 
-Tambem foi criado um middleware centralizado de erros.
+Tambem foram adicionados:
+
+- Middleware centralizado de erros.
+- Autenticacao JWT Bearer.
+- Politica `SupportTeam` para `Administrator` e `Agent`.
+- Endpoint publico de login.
+- Endpoints protegidos por token.
 
 ### Etapa 8: criacao do WinForms
 
 Foi criado um cliente desktop com:
 
 - Campo para URL da API.
+- Campos de e-mail e senha.
+- Login na API.
 - Tabela de chamados.
 - Botoes de atualizacao e mudanca de status.
 - Formulario para abertura de chamado.
+- Envio do token JWT em todas as chamadas protegidas.
 
 Esse projeto representa a parte legada.
 
@@ -656,10 +811,13 @@ Esse projeto representa a parte legada.
 Foi criado um front-end com:
 
 - Cards de resumo.
+- Tela de login.
+- Botoes de perfis demo.
 - Filtros.
 - Tabela de chamados.
 - Formulario de abertura.
 - Acoes de mudanca de status.
+- Armazenamento local do token da sessao.
 
 ### Etapa 10: testes
 
@@ -668,6 +826,8 @@ Foram criados testes unitarios para validar:
 - Criacao de chamado.
 - Alteracao de status.
 - Registro de historico.
+- Login com credenciais validas.
+- Bloqueio de senha invalida.
 
 ### Etapa 11: validacao tecnica
 
@@ -679,6 +839,12 @@ dotnet test CoopDesk.sln
 pnpm build
 dotnet list CoopDesk.sln package --vulnerable --include-transitive
 ```
+
+Tambem foi validado manualmente:
+
+- `GET /api/tickets` sem token retorna `401`.
+- `POST /api/auth/login` retorna JWT para `atendente@coopdesk.local`.
+- `GET /api/tickets` com token retorna chamados.
 
 ## Decisoes tecnicas importantes
 
@@ -697,6 +863,14 @@ Para nao expor entidades diretamente pela API e controlar contratos de entrada e
 ### Por que usar repositories?
 
 Para isolar o Entity Framework Core da camada Application.
+
+### Por que JWT?
+
+Porque a API passa a ser consumida por dois clientes diferentes, Angular e WinForms. O token JWT permite que ambos enviem a identidade do usuario no cabecalho HTTP sem manter sessao de servidor.
+
+### Por que PBKDF2?
+
+Porque senha nao deve ser persistida em texto puro. PBKDF2 com salt e comparacao em tempo fixo e uma solucao simples, nativa do .NET e suficiente para demonstrar cuidado com seguranca em um projeto de portfolio.
 
 ### Por que Angular?
 
@@ -719,20 +893,25 @@ Pontos que podem ser explicados:
 - A camada Application e testavel.
 - A infraestrutura usa EF Core e SQL Server.
 - Os endpoints seguem estilo REST.
+- A API usa JWT Bearer e autorizacao por perfil.
+- O Angular e o WinForms autenticam antes de consumir endpoints protegidos.
 - O projeto tem testes unitarios.
 - O README documenta decisao, execucao e evolucao.
 
 ## Como subir para o GitHub
 
-Quando o projeto estiver pronto:
+Repositorio publicado:
+
+```text
+https://github.com/dansfisica85/CoopDesk
+```
+
+Fluxo usado para publicar novas alteracoes:
 
 ```powershell
-git init
 git add .
-git commit -m "Initial CoopDesk portfolio project"
-git branch -M main
-git remote add origin https://github.com/SEU_USUARIO/coopdesk.git
-git push -u origin main
+git commit -m "Describe the change"
+git push
 ```
 
 Antes de commitar, confira:
@@ -765,6 +944,8 @@ Esses itens ja estao cobertos no `.gitignore`.
 - WinForms consumindo API.
 - Angular consumindo API.
 - SQL Server LocalDB.
+- Autenticacao JWT.
+- Autorizacao por perfil.
 - Testes unitarios.
 
 ### Versao 2
@@ -777,8 +958,8 @@ Esses itens ja estao cobertos no `.gitignore`.
 
 ### Versao 3
 
-- Autenticacao.
-- Autorizacao por perfil.
+- Cadastro administrativo de usuarios.
+- Refresh token.
 - Dashboard gerencial.
 - Relatorios.
 - GitHub Actions.
@@ -794,16 +975,20 @@ Implementado:
 - SQL Server LocalDB.
 - Windows Forms.
 - Angular.
+- Autenticacao JWT.
+- Usuarios demo com roles.
+- Autorizacao por perfil.
 - Testes unitarios.
 - Documentacao inicial.
 
 Validado:
 
 - Build C# sem erros.
-- Testes passando.
+- 4 testes unitarios passando.
 - Build Angular passando.
-- API respondendo em `http://localhost:5298`.
-- WinForms carregando chamados pela API.
+- API exigindo token em endpoints protegidos.
+- Login retornando JWT para usuario demo.
+- Consulta de chamados funcionando com `Authorization: Bearer`.
 
 ## Licenca
 
