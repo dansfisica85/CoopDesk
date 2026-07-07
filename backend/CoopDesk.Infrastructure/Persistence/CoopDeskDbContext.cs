@@ -86,6 +86,7 @@ public sealed class CoopDeskDbContext(DbContextOptions<CoopDeskDbContext> option
             builder.HasKey(ticket => ticket.Id);
             builder.Property(ticket => ticket.Title).HasMaxLength(180).IsRequired();
             builder.Property(ticket => ticket.Description).HasMaxLength(4000).IsRequired();
+            builder.Property(ticket => ticket.ProblemType).HasConversion<string>().HasMaxLength(40).IsRequired();
             builder.Property(ticket => ticket.Priority).HasConversion<string>().HasMaxLength(24).IsRequired();
             builder.Property(ticket => ticket.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
             builder.Property(ticket => ticket.CreatedAtUtc).IsRequired();
@@ -205,6 +206,7 @@ public sealed class CoopDeskDbContext(DbContextOptions<CoopDeskDbContext> option
             Id = ticketId,
             Title = "Falha ao consultar proposta de credito",
             Description = "Tela legada apresenta timeout ao buscar propostas com muitas parcelas.",
+            ProblemType = SupportProblemType.SystemError,
             Priority = TicketPriority.High,
             Status = TicketStatus.Open,
             RequesterId = carlaId,

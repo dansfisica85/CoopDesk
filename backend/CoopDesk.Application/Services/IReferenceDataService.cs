@@ -6,4 +6,5 @@ public interface IReferenceDataService
 {
     Task<IReadOnlyCollection<LookupItemDto>> ListDepartmentsAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyCollection<LookupItemDto>> ListCollaboratorsAsync(CancellationToken cancellationToken = default);
+    IReadOnlyCollection<ProblemTypeDto> ListProblemTypes();
 }

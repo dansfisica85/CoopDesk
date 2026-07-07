@@ -25,8 +25,12 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AngularDev", policy =>
     {
+        var allowedOrigins = builder.Configuration
+            .GetSection("Cors:AllowedOrigins")
+            .Get<string[]>() ?? ["http://localhost:4200"];
+
         policy
-            .WithOrigins("http://localhost:4200")
+            .WithOrigins(allowedOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -34,6 +38,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped<ITicketService, TicketService>();
 builder.Services.AddScoped<IReferenceDataService, ReferenceDataService>();
+builder.Services.AddScoped<ISupportRequestService, SupportRequestService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
@@ -101,6 +106,7 @@ static async Task TryEnsureDatabaseAsync(WebApplication app)
     {
         await dbContext.Database.EnsureCreatedAsync();
         _ = await dbContext.Users.AsNoTracking().AnyAsync();
+        _ = await dbContext.Tickets.AsNoTracking().OrderBy(ticket => ticket.Id).Select(ticket => ticket.ProblemType).FirstOrDefaultAsync();
     }
     catch (Exception exception)
     {

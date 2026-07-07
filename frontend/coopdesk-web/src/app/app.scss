@@ -207,7 +207,7 @@ button:disabled {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(180px, 1.3fr) repeat(3, minmax(120px, 0.8fr)) auto;
+  grid-template-columns: minmax(180px, 1.3fr) repeat(4, minmax(120px, 0.8fr)) auto;
   gap: 12px;
   align-items: end;
   padding: 14px;
@@ -221,7 +221,7 @@ button:disabled {
 
 table {
   width: 100%;
-  min-width: 900px;
+  min-width: 1020px;
   border-collapse: collapse;
 }
 

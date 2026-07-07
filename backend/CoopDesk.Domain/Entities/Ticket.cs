@@ -15,10 +15,12 @@ public sealed class Ticket : Entity
         TicketPriority priority,
         Guid requesterId,
         Guid departmentId,
-        string createdBy)
+        string createdBy,
+        SupportProblemType problemType = SupportProblemType.Other)
     {
         Title = RequireText(title, nameof(title));
         Description = RequireText(description, nameof(description));
+        ProblemType = problemType;
         Priority = priority;
         Status = TicketStatus.Open;
         RequesterId = requesterId;
@@ -28,6 +30,7 @@ public sealed class Ticket : Entity
 
     public string Title { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
+    public SupportProblemType ProblemType { get; private set; } = SupportProblemType.Other;
     public TicketPriority Priority { get; private set; }
     public TicketStatus Status { get; private set; }
     public Guid RequesterId { get; private set; }
@@ -41,12 +44,13 @@ public sealed class Ticket : Entity
     public DateTime? ClosedAtUtc { get; private set; }
     public ICollection<TicketHistory> History { get; private set; } = new List<TicketHistory>();
 
-    public void UpdateDetails(string title, string description, TicketPriority priority, Guid departmentId, DateTime? dueAtUtc)
+    public void UpdateDetails(string title, string description, TicketPriority priority, Guid departmentId, DateTime? dueAtUtc, SupportProblemType? problemType = null)
     {
         EnsureEditable();
 
         Title = RequireText(title, nameof(title));
         Description = RequireText(description, nameof(description));
+        ProblemType = problemType ?? ProblemType;
         Priority = priority;
         DepartmentId = departmentId;
         DueAtUtc = dueAtUtc;

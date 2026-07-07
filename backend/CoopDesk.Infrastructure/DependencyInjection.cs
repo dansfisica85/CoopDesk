@@ -20,6 +20,7 @@ public static class DependencyInjection
         services.AddScoped<ITicketRepository, TicketRepository>();
         services.AddScoped<IReferenceDataRepository, ReferenceDataRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ISupportRequestRepository, SupportRequestRepository>();
         services.AddSingleton<IPasswordHashService, Pbkdf2PasswordHashService>();
 
         return services;

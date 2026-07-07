@@ -17,6 +17,7 @@ public sealed class TicketServiceTests
         var request = new CreateTicketRequest(
             "Acesso ao sistema legado",
             "Usuario nao consegue acessar a tela de propostas.",
+            SupportProblemType.Access,
             TicketPriority.High,
             Guid.NewGuid(),
             Guid.NewGuid(),

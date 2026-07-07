@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -15,300 +14,212 @@ public partial class Form1 : Form
         Converters = { new JsonStringEnumConverter() }
     };
 
-    private readonly BindingSource _ticketsBindingSource = new();
-
-    private readonly TextBox _apiBaseTextBox = new() { Text = "http://localhost:5298", Width = 220 };
-    private readonly TextBox _emailTextBox = new() { Text = "atendente@coopdesk.local", Width = 180 };
-    private readonly TextBox _passwordTextBox = new() { Text = "Demo@12345", UseSystemPasswordChar = true, Width = 110 };
-    private readonly Label _sessionLabel = new() { Text = "Sessao: nao autenticada", AutoSize = true, Padding = new Padding(0, 8, 0, 0) };
-    private readonly DataGridView _ticketsGrid = new();
-    private readonly ComboBox _requesterComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly TextBox _apiBaseTextBox = new() { Text = "http://localhost:5298", Width = 260 };
+    private readonly TextBox _nameTextBox = new();
+    private readonly TextBox _emailTextBox = new();
     private readonly ComboBox _departmentComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _priorityComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly TextBox _titleTextBox = new();
-    private readonly TextBox _descriptionTextBox = new() { Multiline = true, Height = 70, ScrollBars = ScrollBars.Vertical };
+    private readonly ComboBox _problemTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly TextBox _descriptionTextBox = new() { Multiline = true, Height = 140, ScrollBars = ScrollBars.Vertical };
+    private readonly Label _protocolLabel = new() { Text = "Nenhuma solicitacao enviada nesta sessao.", AutoSize = true };
     private readonly ToolStripStatusLabel _statusLabel = new("Pronto");
 
     public Form1()
     {
         InitializeComponent();
         BuildLayout();
-        Shown += async (_, _) =>
-        {
-            if (await LoginAsync())
-            {
-                await LoadInitialDataAsync();
-            }
-        };
+        Shown += async (_, _) => await LoadReferenceDataAsync();
     }
 
     private void BuildLayout()
     {
-        Text = "CoopDesk Legacy - Atendimento Interno";
-        Width = 1180;
-        Height = 720;
-        MinimumSize = new Size(980, 620);
+        Text = "CoopDesk Client - Solicitar Suporte";
+        Width = 760;
+        Height = 620;
+        MinimumSize = new Size(680, 560);
 
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             RowCount = 4,
-            Padding = new Padding(12)
+            Padding = new Padding(16)
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
 
-        var toolbar = new FlowLayoutPanel
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 360));
+
+        var title = new Label
+        {
+            Text = "Solicitacao de suporte",
+            AutoSize = true,
+            Font = new Font(Font.FontFamily, 16, FontStyle.Bold),
+            Anchor = AnchorStyles.Left
+        };
+
+        var apiPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false
         };
+        var reloadButton = new Button { Text = "Recarregar", Width = 90 };
+        reloadButton.Click += async (_, _) => await LoadReferenceDataAsync();
 
-        var refreshButton = new Button { Text = "Atualizar", Width = 100 };
-        refreshButton.Click += async (_, _) => await LoadTicketsAsync();
-
-        var loginButton = new Button { Text = "Entrar", Width = 80 };
-        loginButton.Click += async (_, _) =>
-        {
-            if (await LoginAsync())
-            {
-                await LoadInitialDataAsync();
-            }
-        };
-
-        var startButton = new Button { Text = "Atender", Width = 90 };
-        startButton.Click += async (_, _) => await ChangeSelectedTicketStatusAsync(TicketStatus.InProgress, "Atendimento iniciado pelo legado WinForms.");
-
-        var resolveButton = new Button { Text = "Resolver", Width = 90 };
-        resolveButton.Click += async (_, _) => await ChangeSelectedTicketStatusAsync(TicketStatus.Resolved, "Chamado resolvido pelo legado WinForms.");
-
-        var closeButton = new Button { Text = "Fechar", Width = 90 };
-        closeButton.Click += async (_, _) => await ChangeSelectedTicketStatusAsync(TicketStatus.Closed, "Chamado fechado pelo legado WinForms.");
-
-        toolbar.Controls.AddRange([
+        apiPanel.Controls.AddRange([
             new Label { Text = "API:", AutoSize = true, Padding = new Padding(0, 8, 0, 0) },
             _apiBaseTextBox,
-            new Label { Text = "E-mail:", AutoSize = true, Padding = new Padding(0, 8, 0, 0) },
-            _emailTextBox,
-            new Label { Text = "Senha:", AutoSize = true, Padding = new Padding(0, 8, 0, 0) },
-            _passwordTextBox,
-            loginButton,
-            refreshButton,
-            startButton,
-            resolveButton,
-            closeButton,
-            _sessionLabel
+            reloadButton
         ]);
 
-        ConfigureGrid();
+        header.Controls.Add(title, 0, 0);
+        header.Controls.Add(apiPanel, 1, 0);
 
-        var form = BuildCreateTicketForm();
+        var form = BuildSupportRequestForm();
+
+        var resultPanel = new GroupBox
+        {
+            Dock = DockStyle.Fill,
+            Text = "Protocolo"
+        };
+        _protocolLabel.Dock = DockStyle.Fill;
+        _protocolLabel.Padding = new Padding(10);
+        resultPanel.Controls.Add(_protocolLabel);
 
         var statusStrip = new StatusStrip();
         statusStrip.Items.Add(_statusLabel);
 
-        root.Controls.Add(toolbar, 0, 0);
-        root.Controls.Add(_ticketsGrid, 0, 1);
-        root.Controls.Add(form, 0, 2);
+        root.Controls.Add(header, 0, 0);
+        root.Controls.Add(form, 0, 1);
+        root.Controls.Add(resultPanel, 0, 2);
         root.Controls.Add(statusStrip, 0, 3);
 
         Controls.Add(root);
     }
 
-    private void ConfigureGrid()
-    {
-        _ticketsGrid.Dock = DockStyle.Fill;
-        _ticketsGrid.AutoGenerateColumns = false;
-        _ticketsGrid.AllowUserToAddRows = false;
-        _ticketsGrid.AllowUserToDeleteRows = false;
-        _ticketsGrid.ReadOnly = true;
-        _ticketsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _ticketsGrid.MultiSelect = false;
-        _ticketsGrid.DataSource = _ticketsBindingSource;
-
-        _ticketsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Titulo", DataPropertyName = nameof(TicketSummaryDto.Title), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _ticketsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Prioridade", DataPropertyName = nameof(TicketSummaryDto.Priority), Width = 100 });
-        _ticketsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Status", DataPropertyName = nameof(TicketSummaryDto.Status), Width = 120 });
-        _ticketsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Solicitante", DataPropertyName = nameof(TicketSummaryDto.RequesterName), Width = 160 });
-        _ticketsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Area", DataPropertyName = nameof(TicketSummaryDto.DepartmentName), Width = 140 });
-        _ticketsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Responsavel", DataPropertyName = nameof(TicketSummaryDto.AssignedAgentName), Width = 160 });
-        _ticketsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Criado em UTC", DataPropertyName = nameof(TicketSummaryDto.CreatedAtUtc), Width = 150 });
-    }
-
-    private Control BuildCreateTicketForm()
+    private Control BuildSupportRequestForm()
     {
         var group = new GroupBox
         {
             Dock = DockStyle.Fill,
-            Text = "Abrir chamado"
+            Text = "Dados da solicitacao"
         };
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 4,
-            RowCount = 4,
-            Padding = new Padding(10)
+            ColumnCount = 2,
+            RowCount = 6,
+            Padding = new Padding(14)
         };
 
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
 
-        _priorityComboBox.DataSource = Enum.GetValues<TicketPriority>();
-        _priorityComboBox.SelectedItem = TicketPriority.Medium;
+        AddLabeledControl(layout, "Nome", _nameTextBox, 0);
+        AddLabeledControl(layout, "E-mail", _emailTextBox, 1);
+        AddLabeledControl(layout, "Setor", _departmentComboBox, 2);
+        AddLabeledControl(layout, "Problema", _problemTypeComboBox, 3);
+        AddLabeledControl(layout, "Descricao", _descriptionTextBox, 4);
 
-        AddLabeledControl(layout, "Titulo", _titleTextBox, 0, 0);
-        AddLabeledControl(layout, "Prioridade", _priorityComboBox, 2, 0);
-        AddLabeledControl(layout, "Solicitante", _requesterComboBox, 0, 1);
-        AddLabeledControl(layout, "Area", _departmentComboBox, 2, 1);
-        AddLabeledControl(layout, "Descricao", _descriptionTextBox, 0, 2);
-        layout.SetColumnSpan(_descriptionTextBox, 3);
-
-        var createButton = new Button { Text = "Abrir chamado", Width = 140, Anchor = AnchorStyles.Right };
-        createButton.Click += async (_, _) => await CreateTicketAsync();
-        layout.Controls.Add(createButton, 3, 3);
+        var submitButton = new Button
+        {
+            Text = "Enviar solicitacao",
+            Width = 150,
+            Height = 34,
+            Anchor = AnchorStyles.Right
+        };
+        submitButton.Click += async (_, _) => await SubmitSupportRequestAsync();
+        layout.Controls.Add(submitButton, 1, 5);
 
         group.Controls.Add(layout);
         return group;
     }
 
-    private static void AddLabeledControl(TableLayoutPanel layout, string label, Control control, int column, int row)
+    private static void AddLabeledControl(TableLayoutPanel layout, string label, Control control, int row)
     {
-        layout.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left }, column, row);
+        layout.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         control.Dock = DockStyle.Fill;
-        layout.Controls.Add(control, column + 1, row);
-    }
-
-    private async Task LoadInitialDataAsync()
-    {
-        await LoadReferenceDataAsync();
-        await LoadTicketsAsync();
-    }
-
-    private async Task<bool> LoginAsync()
-    {
-        try
-        {
-            var request = new LoginRequest(_emailTextBox.Text, _passwordTextBox.Text);
-            using var response = await _httpClient.PostAsJsonAsync(BuildUri("api/auth/login"), request, _jsonOptions);
-            response.EnsureSuccessStatusCode();
-
-            var auth = await response.Content.ReadFromJsonAsync<AuthResponseDto>(_jsonOptions);
-            if (auth is null)
-            {
-                SetStatus("Resposta de autenticacao invalida.");
-                return false;
-            }
-
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", auth.AccessToken);
-            _sessionLabel.Text = $"Sessao: {auth.User.FullName} ({auth.User.Role})";
-            SetStatus("Sessao autenticada.");
-            return true;
-        }
-        catch (Exception exception)
-        {
-            _httpClient.DefaultRequestHeaders.Authorization = null;
-            _sessionLabel.Text = "Sessao: nao autenticada";
-            SetStatus($"Nao foi possivel autenticar: {exception.Message}");
-            return false;
-        }
+        layout.Controls.Add(control, 1, row);
     }
 
     private async Task LoadReferenceDataAsync()
     {
         try
         {
+            SetStatus("Carregando dados de apoio...");
+
             var departments = await _httpClient.GetFromJsonAsync<List<LookupItemDto>>(BuildUri("api/reference-data/departments"), _jsonOptions) ?? [];
-            var collaborators = await _httpClient.GetFromJsonAsync<List<LookupItemDto>>(BuildUri("api/reference-data/collaborators"), _jsonOptions) ?? [];
+            var problemTypes = await _httpClient.GetFromJsonAsync<List<ProblemTypeDto>>(BuildUri("api/reference-data/problem-types"), _jsonOptions) ?? [];
 
             _departmentComboBox.DataSource = departments;
             _departmentComboBox.DisplayMember = nameof(LookupItemDto.Name);
             _departmentComboBox.ValueMember = nameof(LookupItemDto.Id);
 
-            _requesterComboBox.DataSource = collaborators;
-            _requesterComboBox.DisplayMember = nameof(LookupItemDto.Name);
-            _requesterComboBox.ValueMember = nameof(LookupItemDto.Id);
+            _problemTypeComboBox.DataSource = problemTypes;
+            _problemTypeComboBox.DisplayMember = nameof(ProblemTypeDto.Name);
+            _problemTypeComboBox.ValueMember = nameof(ProblemTypeDto.Value);
+
+            SetStatus("Dados carregados. Preencha a solicitacao.");
         }
         catch (Exception exception)
         {
-            SetStatus($"Nao foi possivel carregar cadastros: {exception.Message}");
+            SetStatus($"Nao foi possivel carregar dados: {exception.Message}");
         }
     }
 
-    private async Task LoadTicketsAsync()
+    private async Task SubmitSupportRequestAsync()
     {
-        try
+        if (_departmentComboBox.SelectedValue is not Guid departmentId ||
+            _problemTypeComboBox.SelectedValue is not string problemTypeValue ||
+            !Enum.TryParse<SupportProblemType>(problemTypeValue, out var problemType))
         {
-            var tickets = await _httpClient.GetFromJsonAsync<List<TicketSummaryDto>>(BuildUri("api/tickets"), _jsonOptions) ?? [];
-            _ticketsBindingSource.DataSource = tickets;
-            SetStatus($"{tickets.Count} chamado(s) carregado(s).");
-        }
-        catch (Exception exception)
-        {
-            SetStatus($"Nao foi possivel carregar chamados: {exception.Message}");
-        }
-    }
-
-    private async Task CreateTicketAsync()
-    {
-        if (_requesterComboBox.SelectedValue is not Guid requesterId || _departmentComboBox.SelectedValue is not Guid departmentId)
-        {
-            SetStatus("Selecione solicitante e area.");
+            SetStatus("Selecione setor e tipo de problema.");
             return;
         }
 
-        var request = new CreateTicketRequest(
-            _titleTextBox.Text,
-            _descriptionTextBox.Text,
-            (TicketPriority)_priorityComboBox.SelectedItem!,
-            requesterId,
+        var request = new CreateSupportRequest(
+            _nameTextBox.Text,
+            _emailTextBox.Text,
             departmentId,
-            null);
+            problemType,
+            _descriptionTextBox.Text);
 
         try
         {
-            using var response = await _httpClient.PostAsJsonAsync(BuildUri("api/tickets"), request, _jsonOptions);
+            SetStatus("Enviando solicitacao...");
+            using var response = await _httpClient.PostAsJsonAsync(BuildUri("api/support-requests"), request, _jsonOptions);
             response.EnsureSuccessStatusCode();
-            _titleTextBox.Clear();
-            _descriptionTextBox.Clear();
-            await LoadTicketsAsync();
-            SetStatus("Chamado criado.");
-        }
-        catch (Exception exception)
-        {
-            SetStatus($"Nao foi possivel criar chamado: {exception.Message}");
-        }
-    }
 
-    private async Task ChangeSelectedTicketStatusAsync(TicketStatus status, string notes)
-    {
-        if (_ticketsBindingSource.Current is not TicketSummaryDto selectedTicket)
-        {
-            SetStatus("Selecione um chamado.");
-            return;
-        }
-
-        try
-        {
-            var request = new ChangeTicketStatusRequest(status, notes, Environment.UserName);
-            using var message = new HttpRequestMessage(HttpMethod.Patch, BuildUri($"api/tickets/{selectedTicket.Id}/status"))
+            var result = await response.Content.ReadFromJsonAsync<SupportRequestResponseDto>(_jsonOptions);
+            if (result is null)
             {
-                Content = JsonContent.Create(request, options: _jsonOptions)
-            };
-            using var response = await _httpClient.SendAsync(message);
-            response.EnsureSuccessStatusCode();
-            await LoadTicketsAsync();
-            SetStatus($"Chamado atualizado para {status}.");
+                SetStatus("Solicitacao enviada, mas a API nao retornou protocolo.");
+                return;
+            }
+
+            _descriptionTextBox.Clear();
+            _protocolLabel.Text = $"Protocolo: {result.Protocol}\nStatus: {result.Status}\nCriado em UTC: {result.CreatedAtUtc:dd/MM/yyyy HH:mm}";
+            SetStatus("Solicitacao enviada com sucesso.");
         }
         catch (Exception exception)
         {
-            SetStatus($"Nao foi possivel atualizar chamado: {exception.Message}");
+            SetStatus($"Nao foi possivel enviar: {exception.Message}");
         }
     }
 

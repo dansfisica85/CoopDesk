@@ -16,11 +16,12 @@ public sealed class TicketsController(ITicketService ticketService) : Controller
     public async Task<ActionResult<IReadOnlyCollection<TicketSummaryDto>>> Search(
         [FromQuery] TicketStatus? status,
         [FromQuery] TicketPriority? priority,
+        [FromQuery] SupportProblemType? problemType,
         [FromQuery] Guid? departmentId,
         [FromQuery] string? search,
         CancellationToken cancellationToken)
     {
-        var tickets = await ticketService.SearchAsync(new TicketQuery(status, priority, departmentId, search), cancellationToken);
+        var tickets = await ticketService.SearchAsync(new TicketQuery(status, priority, problemType, departmentId, search), cancellationToken);
         return Ok(tickets);
     }
 

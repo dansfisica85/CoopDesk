@@ -26,11 +26,12 @@ public sealed class TicketService(ITicketRepository ticketRepository) : ITicketS
             request.Priority,
             request.RequesterId,
             request.DepartmentId,
-            performedBy);
+            performedBy,
+            request.ProblemType);
 
         if (request.DueAtUtc.HasValue)
         {
-            ticket.UpdateDetails(request.Title, request.Description, request.Priority, request.DepartmentId, request.DueAtUtc);
+            ticket.UpdateDetails(request.Title, request.Description, request.Priority, request.DepartmentId, request.DueAtUtc, request.ProblemType);
         }
 
         await ticketRepository.AddAsync(ticket, cancellationToken);
@@ -97,6 +98,7 @@ public sealed class TicketService(ITicketRepository ticketRepository) : ITicketS
         return new TicketSummaryDto(
             ticket.Id,
             ticket.Title,
+            ticket.ProblemType,
             ticket.Priority,
             ticket.Status,
             ticket.Requester?.FullName ?? "Nao informado",
@@ -112,6 +114,7 @@ public sealed class TicketService(ITicketRepository ticketRepository) : ITicketS
             ticket.Id,
             ticket.Title,
             ticket.Description,
+            ticket.ProblemType,
             ticket.Priority,
             ticket.Status,
             ticket.RequesterId,

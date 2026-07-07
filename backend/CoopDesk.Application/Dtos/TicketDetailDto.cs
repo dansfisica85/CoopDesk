@@ -6,6 +6,7 @@ public sealed record TicketDetailDto(
     Guid Id,
     string Title,
     string Description,
+    SupportProblemType ProblemType,
     TicketPriority Priority,
     TicketStatus Status,
     Guid RequesterId,

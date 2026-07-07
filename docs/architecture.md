@@ -1,6 +1,6 @@
 # Arquitetura
 
-O CoopDesk foi organizado para demonstrar uma migracao incremental de legado desktop para web.
+O CoopDesk foi organizado para demonstrar um produto de suporte com cliente Windows, API segura e central web.
 
 ## Camadas
 
@@ -15,6 +15,7 @@ Contem entidades e regras centrais:
 - `AppUser`
 - `TicketPriority`
 - `TicketStatus`
+- `SupportProblemType`
 - `UserRole`
 
 Regras como abertura, atribuicao, mudanca de status, perfis de usuario e bloqueio de edicao em chamados fechados ficam aqui.
@@ -27,10 +28,12 @@ Principais classes:
 
 - `TicketService`
 - `AuthService`
+- `SupportRequestService`
 - `ReferenceDataService`
 - `ITicketRepository`
 - `IReferenceDataRepository`
 - `IUserRepository`
+- `ISupportRequestRepository`
 
 ### Infrastructure
 
@@ -42,6 +45,7 @@ Principais classes:
 - `TicketRepository`
 - `ReferenceDataRepository`
 - `UserRepository`
+- `SupportRequestRepository`
 - `Pbkdf2PasswordHashService`
 
 ### Api
@@ -50,6 +54,7 @@ Exposicao REST em ASP.NET Core:
 
 - `TicketsController`
 - `AuthController`
+- `SupportRequestsController`
 - `ReferenceDataController`
 - `HealthController`
 - `JwtTokenService`
@@ -57,7 +62,7 @@ Exposicao REST em ASP.NET Core:
 
 ### Desktop
 
-Cliente Windows Forms que representa a aplicacao legado. Ele autentica na API, envia token JWT nas chamadas HTTP e simula uma migracao gradual em vez de um corte total.
+Cliente Windows Forms que representa o aplicativo instalado no computador do usuario final. Ele carrega setores e tipos de problema pela API, envia solicitacoes publicas e recebe um protocolo, sem acessar diretamente o banco de dados.
 
 ### Frontend
 

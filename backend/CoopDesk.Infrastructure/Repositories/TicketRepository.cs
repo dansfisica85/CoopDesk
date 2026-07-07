@@ -27,6 +27,11 @@ public sealed class TicketRepository(CoopDeskDbContext dbContext) : ITicketRepos
             tickets = tickets.Where(ticket => ticket.Priority == query.Priority.Value);
         }
 
+        if (query.ProblemType.HasValue)
+        {
+            tickets = tickets.Where(ticket => ticket.ProblemType == query.ProblemType.Value);
+        }
+
         if (query.DepartmentId.HasValue)
         {
             tickets = tickets.Where(ticket => ticket.DepartmentId == query.DepartmentId.Value);

@@ -2,30 +2,35 @@
 
 CoopDesk e um sistema de atendimento interno construido como projeto de portfolio para demonstrar competencias de Desenvolvedor FullStack com C# .NET, Windows Forms, ASP.NET Core, Angular, SQL Server, Git, boas praticas de arquitetura e testes.
 
-O projeto simula um cenario corporativo real: uma empresa possui uma aplicacao desktop legada em Windows Forms usada por colaboradores internos, mas precisa evoluir para uma arquitetura moderna baseada em API REST, banco relacional e front-end web em Angular, sem interromper a operacao atual.
+O projeto simula um cenario corporativo real: usuarios finais instalam um aplicativo Windows para abrir solicitacoes de suporte, enquanto a equipe de atendimento usa uma central web em Angular para acompanhar, filtrar e tratar os chamados. A API ASP.NET Core fica no meio do fluxo e protege o banco de dados.
 
 ## Proposito da aplicacao
 
-O CoopDesk tem como proposito centralizar, registrar, acompanhar e resolver chamados internos de suporte tecnico e operacional.
+O CoopDesk tem como proposito centralizar, registrar, acompanhar e resolver solicitacoes de suporte tecnico e operacional.
 
-Em um ambiente corporativo, colaboradores de areas como Credito, Operacoes, Atendimento e Tecnologia precisam reportar problemas em sistemas internos, solicitar ajustes, acompanhar prazos e registrar historico de atendimento. O CoopDesk organiza esse fluxo.
+Em um ambiente corporativo, usuarios de areas como Credito, Operacoes, Atendimento e Tecnologia precisam reportar problemas em sistemas internos, solicitar ajustes, acompanhar prazos e registrar historico de atendimento. O CoopDesk organiza esse fluxo.
 
 O projeto foi pensado para contar uma historia tecnica clara em entrevista:
 
-1. Existe um sistema desktop legado em Windows Forms.
-2. Esse sistema ainda e usado pela operacao.
-3. Uma nova API ASP.NET Core passa a concentrar as regras de negocio e acesso ao banco.
-4. O WinForms deixa de acessar o banco diretamente e passa a consumir a API.
-5. Um front-end Angular oferece uma experiencia moderna para o mesmo dominio.
-6. A migracao acontece de forma gradual, reduzindo risco para o negocio.
+1. O usuario final baixa um aplicativo Windows.
+2. O aplicativo coleta nome, e-mail, setor, tipo de problema e descricao.
+3. O app envia a solicitacao para uma API ASP.NET Core, sem conhecer o banco.
+4. A API grava o chamado no banco relacional.
+5. A equipe de suporte acessa a central Angular com login.
+6. A central lista, filtra e atualiza os chamados por status.
+7. O banco e tokens sensiveis ficam protegidos no servidor da API.
 
 ## O que a aplicacao sera capaz de fazer
 
 ### Funcionalidades atuais
 
 - Listar chamados internos.
-- Abrir novo chamado.
+- Abrir novo chamado pela central autenticada.
+- Abrir solicitacao publica pelo aplicativo Windows.
 - Informar titulo, descricao, solicitante, area e prioridade.
+- Informar nome, e-mail, setor, tipo de problema e descricao no app Windows.
+- Gerar protocolo para solicitacoes enviadas pelo app Windows.
+- Classificar solicitacoes por tipo de problema.
 - Classificar chamados por prioridade.
 - Controlar status do chamado.
 - Alterar status para atendimento, resolvido ou fechado.
@@ -40,6 +45,8 @@ O projeto foi pensado para contar uma historia tecnica clara em entrevista:
 - Controlar permissoes por perfil: `Administrator`, `Agent` e `Requester`.
 - Consumir a mesma API por Windows Forms.
 - Consumir a mesma API por Angular.
+- Preparar Angular para deploy no Vercel com `COOPDESK_API_BASE_URL`.
+- Preparar API para CORS configuravel por ambiente.
 - Validar regras de negocio com testes unitarios.
 
 ### Funcionalidades planejadas
@@ -51,6 +58,9 @@ O projeto foi pensado para contar uma historia tecnica clara em entrevista:
 - Cadastro administrativo de usuarios.
 - Recuperacao e troca de senha.
 - Perfil gestor com indicadores por equipe.
+- Empacotador/instalador MSI ou MSIX para o app Windows.
+- Anexos na solicitacao publica.
+- Adaptador opcional para banco Turso/libSQL via API.
 - Dashboard gerencial com indicadores.
 - Relatorios por area, status, prioridade e periodo.
 - Auditoria completa de alteracoes.
@@ -103,6 +113,7 @@ O CoopDesk foi construido para cobrir esses pontos em uma aplicacao pequena, mas
 - HttpClient.
 - FormsModule.
 - Login com armazenamento local de token.
+- Configuracao publica `config.json` gerada por build para apontar para a API.
 
 ### Desktop
 
@@ -111,6 +122,7 @@ O CoopDesk foi construido para cobrir esses pontos em uma aplicacao pequena, mas
 - HttpClient.
 - DataGridView.
 - Login na API com token JWT.
+- Envio publico de solicitacoes sem token de banco.
 
 ### Testes
 
@@ -175,6 +187,7 @@ CoopDesk/
 
   docs/
     architecture.md
+    deployment.md
     interview-script.md
     visual-studio.md
 
@@ -207,6 +220,7 @@ Principais arquivos:
 - `AppUser.cs`
 - `TicketPriority.cs`
 - `TicketStatus.cs`
+- `SupportProblemType.cs`
 - `UserRole.cs`
 
 Exemplo de regra:
@@ -214,6 +228,7 @@ Exemplo de regra:
 - Um chamado fechado ou cancelado nao pode ser editado.
 - Toda mudanca de status gera historico.
 - Todo chamado nasce com status `Open`.
+- Chamados podem ser classificados por tipo de problema.
 - Usuarios possuem perfil de acesso definido por `UserRole`.
 
 ### CoopDesk.Application
@@ -231,12 +246,17 @@ Principais arquivos:
 
 - `TicketService.cs`
 - `AuthService.cs`
+- `SupportRequestService.cs`
 - `ReferenceDataService.cs`
 - `ITicketService.cs`
 - `IAuthService.cs`
+- `ISupportRequestService.cs`
 - `ITicketRepository.cs`
 - `IUserRepository.cs`
+- `ISupportRequestRepository.cs`
 - `CreateTicketRequest.cs`
+- `CreateSupportRequest.cs`
+- `SupportRequestResponseDto.cs`
 - `LoginRequest.cs`
 - `AuthResponseDto.cs`
 - `TicketSummaryDto.cs`
@@ -263,6 +283,7 @@ Principais arquivos:
 - `TicketRepository.cs`
 - `ReferenceDataRepository.cs`
 - `UserRepository.cs`
+- `SupportRequestRepository.cs`
 - `Pbkdf2PasswordHashService.cs`
 
 ### CoopDesk.Api
@@ -283,22 +304,24 @@ Principais controllers:
 
 - `TicketsController`
 - `AuthController`
+- `SupportRequestsController`
 - `ReferenceDataController`
 - `HealthController`
 
 ### CoopDesk.Legacy.WinForms
 
-Cliente desktop que simula a aplicacao legada.
+Cliente desktop que simula o aplicativo instalado no computador do usuario final.
 
 Responsabilidades:
 
-- Permitir operacao basica de chamados via Windows Forms.
-- Autenticar um usuario demo na API.
-- Consumir a API por HTTP.
-- Enviar token JWT nas chamadas protegidas.
-- Demonstrar uma migracao gradual de legado.
+- Permitir abertura simples de solicitacoes via Windows Forms.
+- Carregar setores e tipos de problema da API.
+- Coletar nome, e-mail, setor, tipo de problema e descricao.
+- Enviar solicitacao publica para a API por HTTP.
+- Exibir protocolo retornado pela central.
+- Demonstrar uso de desktop Windows em uma arquitetura moderna com API.
 
-Importante: neste projeto, o WinForms nao acessa o banco diretamente. Ele usa a API. Essa escolha mostra uma estrategia de modernizacao segura: manter o desktop, mas mover regra e persistencia para o back-end.
+Importante: neste projeto, o WinForms nao acessa o banco diretamente e nao recebe token de banco. Ele usa a API. Essa escolha permite distribuir o programa para usuarios sem expor credenciais sensiveis.
 
 ### coopdesk-web
 
@@ -312,6 +335,7 @@ Responsabilidades:
 - Abrir chamado.
 - Alterar status.
 - Consumir endpoints REST da API.
+- Atuar como central de suporte/admin.
 
 ## Modelo de dados
 
@@ -337,6 +361,7 @@ Enums persistidos como texto:
 
 - `TicketPriority`
 - `TicketStatus`
+- `SupportProblemType`
 - `UserRole`
 
 Essa escolha facilita leitura direta no SQL Server durante suporte e troubleshooting.
@@ -349,9 +374,24 @@ PBKDF2$iteracoes$saltBase64$hashBase64
 
 ## Fluxo de trabalho da aplicacao
 
-### Fluxo 1: autenticacao
+### Fluxo 1: solicitacao publica pelo app Windows
 
-1. Usuario acessa o Angular ou o WinForms.
+1. Usuario abre o app `CoopDesk Client`.
+2. App carrega setores em `GET /api/reference-data/departments`.
+3. App carrega tipos de problema em `GET /api/reference-data/problem-types`.
+4. Usuario informa nome, e-mail, setor, tipo de problema e descricao.
+5. App envia `POST /api/support-requests`.
+6. API valida os dados basicos.
+7. API localiza ou cria o solicitante pelo e-mail.
+8. API cria um chamado com status `Open`.
+9. API retorna protocolo no formato `CD-XXXXXXXX`.
+10. App mostra o protocolo para o usuario.
+
+Esse fluxo nao exige login do usuario final e nao expoe credenciais de banco.
+
+### Fluxo 2: autenticacao da central
+
+1. Atendente acessa a central Angular.
 2. Usuario informa e-mail e senha.
 3. Cliente envia `POST /api/auth/login`.
 4. `AuthService` localiza o usuario por e-mail.
@@ -360,7 +400,7 @@ PBKDF2$iteracoes$saltBase64$hashBase64
 7. Cliente salva o token durante a sessao.
 8. Chamadas seguintes enviam `Authorization: Bearer {token}`.
 
-### Fluxo 2: abertura de chamado
+### Fluxo 3: abertura de chamado pela central
 
 1. Usuario autenticado informa titulo, descricao, prioridade, solicitante e area.
 2. Cliente envia `POST /api/tickets` com token JWT.
@@ -373,7 +413,7 @@ PBKDF2$iteracoes$saltBase64$hashBase64
 9. API retorna `201 Created`.
 10. Cliente atualiza a listagem.
 
-### Fluxo 3: listagem de chamados
+### Fluxo 4: listagem de chamados
 
 1. Cliente chama `GET /api/tickets` com token JWT.
 2. API valida o token.
@@ -384,7 +424,7 @@ PBKDF2$iteracoes$saltBase64$hashBase64
 7. API retorna lista de chamados.
 8. Cliente exibe os dados em tabela.
 
-### Fluxo 4: alteracao de status
+### Fluxo 5: alteracao de status
 
 1. Usuario com perfil `Administrator` ou `Agent` seleciona um chamado.
 2. Usuario escolhe atender, resolver ou fechar.
@@ -397,17 +437,17 @@ PBKDF2$iteracoes$saltBase64$hashBase64
 9. Repository salva a alteracao.
 10. Cliente recarrega a lista.
 
-### Fluxo 5: suporte ao legado
+### Fluxo 6: separacao entre cliente e central
 
-1. A equipe continua usando o WinForms.
-2. O WinForms passa a consumir a API.
-3. A regra de negocio deixa de ficar espalhada no desktop.
-4. A equipe pode evoluir o Angular em paralelo.
-5. A migracao para web acontece sem parar a operacao.
+1. Usuario final usa o WinForms apenas para solicitar suporte.
+2. Equipe de atendimento usa o Angular como central.
+3. Ambos falam com a mesma API.
+4. A regra de negocio fica concentrada no back-end.
+5. O banco permanece protegido atras da API.
 
 ## Endpoints
 
-Com excecao de `GET /api/health` e `POST /api/auth/login`, os endpoints exigem:
+Com excecao de `GET /api/health`, `POST /api/auth/login`, `GET /api/reference-data/departments`, `GET /api/reference-data/problem-types` e `POST /api/support-requests`, os endpoints exigem:
 
 ```http
 Authorization: Bearer {accessToken}
@@ -456,6 +496,37 @@ GET /api/auth/me
 
 Retorna o usuario autenticado a partir do token.
 
+### Solicitacao publica de suporte
+
+```http
+POST /api/support-requests
+```
+
+Endpoint usado pelo app Windows distribuido para usuarios finais. Nao exige token JWT e nao recebe nenhum segredo de banco.
+
+Exemplo:
+
+```json
+{
+  "requesterName": "Maria Cliente",
+  "requesterEmail": "maria@example.com",
+  "departmentId": "5d6ef6ef-5f87-47f4-8a8e-e35708e5e101",
+  "problemType": "SystemError",
+  "description": "Nao consigo finalizar uma operacao no sistema."
+}
+```
+
+Resposta:
+
+```json
+{
+  "ticketId": "c46fc2b8-...",
+  "protocol": "CD-C46FC2B8",
+  "status": "Open",
+  "createdAtUtc": "2026-07-07T23:14:00Z"
+}
+```
+
 ### Chamados
 
 ```http
@@ -468,6 +539,7 @@ Filtros opcionais:
 
 - `status`
 - `priority`
+- `problemType`
 - `departmentId`
 - `search`
 
@@ -536,13 +608,19 @@ Remove chamado. Requer perfil `Administrator` ou `Agent`.
 GET /api/reference-data/departments
 ```
 
-Lista departamentos.
+Lista departamentos. Publico para o app Windows carregar setores.
+
+```http
+GET /api/reference-data/problem-types
+```
+
+Lista tipos de problema. Publico para o app Windows carregar a lista de problemas.
 
 ```http
 GET /api/reference-data/collaborators
 ```
 
-Lista colaboradores.
+Lista colaboradores. Requer token JWT porque e usado pela central/admin.
 
 ## Como rodar localmente
 
@@ -632,14 +710,15 @@ No Visual Studio:
 3. Garanta que a API esta rodando em `http://localhost:5298`.
 4. Pressione `Ctrl+F5`.
 
-O WinForms ja vem preenchido com:
+O app Windows carrega setores e tipos de problema da API. O usuario final preenche:
 
-```text
-atendente@coopdesk.local
-Demo@12345
-```
+- nome;
+- e-mail;
+- setor;
+- tipo de problema;
+- descricao.
 
-Ele autentica na API e usa o token JWT nas chamadas seguintes.
+Ao enviar, ele chama `POST /api/support-requests` e recebe um protocolo.
 
 ### Rodar Angular
 
@@ -662,6 +741,22 @@ http://localhost:5298
 ```
 
 Na tela de login, use um dos botoes de perfil demo ou informe manualmente um dos usuarios listados neste README.
+
+### Deploy
+
+Leia tambem:
+
+```text
+docs/deployment.md
+```
+
+Resumo:
+
+- Vercel hospeda apenas o Angular.
+- A variavel do Vercel deve ser `COOPDESK_API_BASE_URL`.
+- Token de banco nunca deve ir para Vercel.
+- Token de banco fica somente na hospedagem da API.
+- A API precisa estar publicada em uma plataforma que rode ASP.NET Core.
 
 ## Como validar
 
@@ -802,7 +897,8 @@ Foi criado um cliente desktop com:
 - Tabela de chamados.
 - Botoes de atualizacao e mudanca de status.
 - Formulario para abertura de chamado.
-- Envio do token JWT em todas as chamadas protegidas.
+- Envio publico de solicitacoes para a API.
+- Exibicao de protocolo retornado pela central.
 
 Esse projeto representa a parte legada.
 
@@ -842,6 +938,9 @@ dotnet list CoopDesk.sln package --vulnerable --include-transitive
 
 Tambem foi validado manualmente:
 
+- `GET /api/reference-data/departments` retorna setores sem token.
+- `GET /api/reference-data/problem-types` retorna tipos de problema sem token.
+- `POST /api/support-requests` cria chamado publico e retorna protocolo.
 - `GET /api/tickets` sem token retorna `401`.
 - `POST /api/auth/login` retorna JWT para `atendente@coopdesk.local`.
 - `GET /api/tickets` com token retorna chamados.
@@ -850,7 +949,7 @@ Tambem foi validado manualmente:
 
 ### Por que WinForms consome API?
 
-Porque esse desenho representa uma migracao gradual. Em vez de reescrever tudo de uma vez, o sistema legado passa a usar o mesmo back-end da aplicacao web.
+Porque o aplicativo Windows deve ser distribuido para usuarios finais sem expor credenciais de banco. O WinForms fala com a API, e a API decide como validar, persistir e retornar o protocolo.
 
 ### Por que separar em camadas?
 
@@ -866,7 +965,7 @@ Para isolar o Entity Framework Core da camada Application.
 
 ### Por que JWT?
 
-Porque a API passa a ser consumida por dois clientes diferentes, Angular e WinForms. O token JWT permite que ambos enviem a identidade do usuario no cabecalho HTTP sem manter sessao de servidor.
+Porque a central Angular precisa identificar atendentes e aplicar permissoes sem manter sessao de servidor. O app Windows nao recebe JWT administrativo; ele usa apenas o endpoint publico de abertura de solicitacao.
 
 ### Por que PBKDF2?
 
@@ -884,17 +983,17 @@ O template instalado trouxe pacote OpenAPI com alerta de vulnerabilidade NU1903 
 
 Pontos que podem ser explicados:
 
-- O projeto simula migracao de legado Windows Forms.
+- O projeto simula um cliente Windows Forms conectado a uma central web.
 - A API concentra regra e persistencia.
 - O Angular representa a nova experiencia web.
-- O WinForms continua funcional durante a transicao.
+- O WinForms abre solicitacoes publicas sem acessar o banco.
 - O banco relacional possui tabelas e relacionamentos coerentes.
 - A camada Domain protege regras de negocio.
 - A camada Application e testavel.
 - A infraestrutura usa EF Core e SQL Server.
 - Os endpoints seguem estilo REST.
 - A API usa JWT Bearer e autorizacao por perfil.
-- O Angular e o WinForms autenticam antes de consumir endpoints protegidos.
+- O Angular autentica a central; o WinForms usa apenas endpoints publicos estreitos.
 - O projeto tem testes unitarios.
 - O README documenta decisao, execucao e evolucao.
 
@@ -941,9 +1040,10 @@ Esses itens ja estao cobertos no `.gitignore`.
 
 - CRUD completo de chamados.
 - API REST.
-- WinForms consumindo API.
+- WinForms enviando solicitacoes publicas para a API.
 - Angular consumindo API.
 - SQL Server LocalDB.
+- Endpoint publico de solicitacao de suporte.
 - Autenticacao JWT.
 - Autorizacao por perfil.
 - Testes unitarios.
@@ -964,6 +1064,8 @@ Esses itens ja estao cobertos no `.gitignore`.
 - Relatorios.
 - GitHub Actions.
 - Testes de integracao.
+- Deploy completo com API hospedada e banco cloud.
+- Adaptador Turso/libSQL atras da API.
 
 ## Status atual
 
@@ -975,6 +1077,9 @@ Implementado:
 - SQL Server LocalDB.
 - Windows Forms.
 - Angular.
+- Endpoint publico de solicitacao com protocolo.
+- Tipos de problema.
+- Configuracao de frontend para Vercel.
 - Autenticacao JWT.
 - Usuarios demo com roles.
 - Autorizacao por perfil.
@@ -984,8 +1089,9 @@ Implementado:
 Validado:
 
 - Build C# sem erros.
-- 4 testes unitarios passando.
+- 5 testes unitarios passando.
 - Build Angular passando.
+- Solicitacao publica criando chamado e protocolo.
 - API exigindo token em endpoints protegidos.
 - Login retornando JWT para usuario demo.
 - Consulta de chamados funcionando com `Authorization: Bearer`.

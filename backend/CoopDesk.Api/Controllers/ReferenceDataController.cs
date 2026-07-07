@@ -10,11 +10,19 @@ namespace CoopDesk.Api.Controllers;
 [Route("api/reference-data")]
 public sealed class ReferenceDataController(IReferenceDataService referenceDataService) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet("departments")]
     public async Task<ActionResult<IReadOnlyCollection<LookupItemDto>>> ListDepartments(CancellationToken cancellationToken)
     {
         var departments = await referenceDataService.ListDepartmentsAsync(cancellationToken);
         return Ok(departments);
+    }
+
+    [AllowAnonymous]
+    [HttpGet("problem-types")]
+    public ActionResult<IReadOnlyCollection<ProblemTypeDto>> ListProblemTypes()
+    {
+        return Ok(referenceDataService.ListProblemTypes());
     }
 
     [HttpGet("collaborators")]

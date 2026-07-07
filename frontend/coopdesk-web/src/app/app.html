@@ -61,6 +61,13 @@
         </label>
 
         <label>
+          Problema
+          <select [(ngModel)]="newTicket.problemType">
+            <option *ngFor="let problemType of problemTypes" [value]="problemType.value">{{ problemType.name }}</option>
+          </select>
+        </label>
+
+        <label>
           Solicitante
           <select [(ngModel)]="newTicket.requesterId">
             <option *ngFor="let collaborator of collaborators" [value]="collaborator.id">{{ collaborator.name }}</option>
@@ -97,12 +104,20 @@
             <select [(ngModel)]="filters.priority">
               <option value="">Todas</option>
               <option *ngFor="let priority of priorities" [value]="priority">{{ priorityLabel(priority) }}</option>
-            </select>
-          </label>
+          </select>
+        </label>
 
-          <label>
-            Area
-            <select [(ngModel)]="filters.departmentId">
+        <label>
+          Problema
+          <select [(ngModel)]="filters.problemType">
+            <option value="">Todos</option>
+            <option *ngFor="let problemType of problemTypes" [value]="problemType.value">{{ problemType.name }}</option>
+          </select>
+        </label>
+
+        <label>
+          Area
+          <select [(ngModel)]="filters.departmentId">
               <option value="">Todas</option>
               <option *ngFor="let department of departments" [value]="department.id">{{ department.name }}</option>
             </select>
@@ -116,6 +131,7 @@
             <thead>
               <tr>
                 <th>Chamado</th>
+                <th>Problema</th>
                 <th>Prioridade</th>
                 <th>Status</th>
                 <th>Solicitante</th>
@@ -130,6 +146,7 @@
                   <strong>{{ ticket.title }}</strong>
                   <span>{{ ticket.createdAtUtc | date: 'dd/MM/yyyy HH:mm' }}</span>
                 </td>
+                <td>{{ problemTypeLabel(ticket.problemType) }}</td>
                 <td><span class="pill" [ngClass]="'priority-' + ticket.priority">{{ priorityLabel(ticket.priority) }}</span></td>
                 <td><span class="pill" [ngClass]="'status-' + ticket.status">{{ statusLabel(ticket.status) }}</span></td>
                 <td>{{ ticket.requesterName }}</td>
@@ -145,10 +162,10 @@
                     <span class="muted">Consulta</span>
                   </ng-template>
                 </td>
-              </tr>
-              <tr *ngIf="!tickets.length && !loading">
-                <td colspan="7" class="empty">Nenhum chamado encontrado.</td>
-              </tr>
+            </tr>
+            <tr *ngIf="!tickets.length && !loading">
+                <td colspan="8" class="empty">Nenhum chamado encontrado.</td>
+            </tr>
             </tbody>
           </table>
         </div>

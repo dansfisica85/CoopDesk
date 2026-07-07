@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 
 type TicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 type TicketStatus = 'Open' | 'InProgress' | 'WaitingBusiness' | 'Resolved' | 'Closed' | 'Canceled';
+type SupportProblemType = 'Access' | 'SystemError' | 'SlowPerformance' | 'RegistrationUpdate' | 'ReportIssue' | 'Other';
 type UserRole = 'Administrator' | 'Agent' | 'Requester';
 
 interface LookupItem {
@@ -16,6 +17,7 @@ interface LookupItem {
 interface TicketSummary {
   id: string;
   title: string;
+  problemType: SupportProblemType;
   priority: TicketPriority;
   status: TicketStatus;
   requesterName: string;
@@ -36,6 +38,10 @@ interface LoginResponse {
   accessToken: string;
   expiresAtUtc: string;
   user: AuthenticatedUser;
+}
+
+interface RuntimeConfig {
+  apiBaseUrl?: string;
 }
 
 @Component({
@@ -65,6 +71,7 @@ export class App implements OnInit {
   tickets: TicketSummary[] = [];
   departments: LookupItem[] = [];
   collaborators: LookupItem[] = [];
+  problemTypes: { value: SupportProblemType; name: string }[] = [];
 
   loginForm = {
     email: 'atendente@coopdesk.local',
@@ -74,6 +81,7 @@ export class App implements OnInit {
   filters = {
     status: '',
     priority: '',
+    problemType: '',
     departmentId: '',
     search: ''
   };
@@ -81,12 +89,18 @@ export class App implements OnInit {
   newTicket = {
     title: '',
     description: '',
+    problemType: 'Other' as SupportProblemType,
     priority: 'Medium' as TicketPriority,
     requesterId: '',
     departmentId: ''
   };
 
   ngOnInit(): void {
+    void this.bootstrapAsync();
+  }
+
+  private async bootstrapAsync(): Promise<void> {
+    await this.loadRuntimeConfig();
     this.restoreSession();
 
     if (this.isAuthenticated) {
@@ -163,15 +177,18 @@ export class App implements OnInit {
 
   async loadReferenceData(): Promise<void> {
     try {
-      const [departments, collaborators] = await Promise.all([
+      const [departments, collaborators, problemTypes] = await Promise.all([
         firstValueFrom(this.http.get<LookupItem[]>(this.url('api/reference-data/departments'), { headers: this.authHeaders() })),
-        firstValueFrom(this.http.get<LookupItem[]>(this.url('api/reference-data/collaborators'), { headers: this.authHeaders() }))
+        firstValueFrom(this.http.get<LookupItem[]>(this.url('api/reference-data/collaborators'), { headers: this.authHeaders() })),
+        firstValueFrom(this.http.get<{ value: SupportProblemType; name: string }[]>(this.url('api/reference-data/problem-types'), { headers: this.authHeaders() }))
       ]);
 
       this.departments = departments ?? [];
       this.collaborators = collaborators ?? [];
+      this.problemTypes = problemTypes ?? [];
       this.newTicket.departmentId = this.departments[0]?.id ?? '';
       this.newTicket.requesterId = this.collaborators[0]?.id ?? '';
+      this.newTicket.problemType = this.problemTypes[0]?.value ?? 'Other';
     } catch (error) {
       this.setError('Nao foi possivel carregar cadastros.', error);
     }
@@ -189,6 +206,10 @@ export class App implements OnInit {
 
       if (this.filters.priority) {
         params = params.set('priority', this.filters.priority);
+      }
+
+      if (this.filters.problemType) {
+        params = params.set('problemType', this.filters.problemType);
       }
 
       if (this.filters.departmentId) {
@@ -218,6 +239,7 @@ export class App implements OnInit {
       await firstValueFrom(this.http.post(this.url('api/tickets'), {
         title: this.newTicket.title,
         description: this.newTicket.description,
+        problemType: this.newTicket.problemType,
         priority: this.newTicket.priority,
         requesterId: this.newTicket.requesterId,
         departmentId: this.newTicket.departmentId,
@@ -277,6 +299,19 @@ export class App implements OnInit {
     return labels[priority];
   }
 
+  problemTypeLabel(problemType: SupportProblemType): string {
+    const labels: Record<SupportProblemType, string> = {
+      Access: 'Acesso',
+      SystemError: 'Erro',
+      SlowPerformance: 'Lentidao',
+      RegistrationUpdate: 'Cadastro',
+      ReportIssue: 'Relatorio',
+      Other: 'Outro'
+    };
+
+    return labels[problemType];
+  }
+
   roleLabel(role?: UserRole): string {
     const labels: Record<UserRole, string> = {
       Administrator: 'Administrador',
@@ -289,6 +324,17 @@ export class App implements OnInit {
 
   private url(path: string): string {
     return `${this.apiBase.trim().replace(/\/$/, '')}/${path.replace(/^\//, '')}`;
+  }
+
+  private async loadRuntimeConfig(): Promise<void> {
+    try {
+      const config = await firstValueFrom(this.http.get<RuntimeConfig>('config.json'));
+      if (config.apiBaseUrl?.trim()) {
+        this.apiBase = config.apiBaseUrl.trim();
+      }
+    } catch {
+      this.apiBase = 'http://localhost:5298';
+    }
   }
 
   private authHeaders(): HttpHeaders {
