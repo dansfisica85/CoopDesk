@@ -1,0 +1,145 @@
+<main class="shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">CoopDesk</p>
+      <h1>Atendimento interno</h1>
+    </div>
+
+    <label class="api-field">
+      <span>API</span>
+      <input [(ngModel)]="apiBase" />
+    </label>
+  </header>
+
+  <section class="metrics" aria-label="Resumo de chamados">
+    <article>
+      <span>Total</span>
+      <strong>{{ tickets.length }}</strong>
+    </article>
+    <article>
+      <span>Abertos</span>
+      <strong>{{ openTickets }}</strong>
+    </article>
+    <article>
+      <span>Criticos</span>
+      <strong>{{ criticalTickets }}</strong>
+    </article>
+    <article>
+      <span>Atendimento</span>
+      <strong>{{ inProgressTickets }}</strong>
+    </article>
+  </section>
+
+  <section class="workspace">
+    <aside class="panel">
+      <h2>Novo chamado</h2>
+
+      <label>
+        Titulo
+        <input [(ngModel)]="newTicket.title" />
+      </label>
+
+      <label>
+        Descricao
+        <textarea [(ngModel)]="newTicket.description"></textarea>
+      </label>
+
+      <label>
+        Prioridade
+        <select [(ngModel)]="newTicket.priority">
+          <option *ngFor="let priority of priorities" [value]="priority">{{ priorityLabel(priority) }}</option>
+        </select>
+      </label>
+
+      <label>
+        Solicitante
+        <select [(ngModel)]="newTicket.requesterId">
+          <option *ngFor="let collaborator of collaborators" [value]="collaborator.id">{{ collaborator.name }}</option>
+        </select>
+      </label>
+
+      <label>
+        Area
+        <select [(ngModel)]="newTicket.departmentId">
+          <option *ngFor="let department of departments" [value]="department.id">{{ department.name }}</option>
+        </select>
+      </label>
+
+      <button type="button" class="primary" (click)="createTicket()">Abrir chamado</button>
+    </aside>
+
+    <section class="content">
+      <div class="filters">
+        <label>
+          Busca
+          <input [(ngModel)]="filters.search" (keyup.enter)="loadTickets()" />
+        </label>
+
+        <label>
+          Status
+          <select [(ngModel)]="filters.status">
+            <option value="">Todos</option>
+            <option *ngFor="let status of statuses" [value]="status">{{ statusLabel(status) }}</option>
+          </select>
+        </label>
+
+        <label>
+          Prioridade
+          <select [(ngModel)]="filters.priority">
+            <option value="">Todas</option>
+            <option *ngFor="let priority of priorities" [value]="priority">{{ priorityLabel(priority) }}</option>
+          </select>
+        </label>
+
+        <label>
+          Area
+          <select [(ngModel)]="filters.departmentId">
+            <option value="">Todas</option>
+            <option *ngFor="let department of departments" [value]="department.id">{{ department.name }}</option>
+          </select>
+        </label>
+
+        <button type="button" (click)="loadTickets()">Filtrar</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Chamado</th>
+              <th>Prioridade</th>
+              <th>Status</th>
+              <th>Solicitante</th>
+              <th>Area</th>
+              <th>Responsavel</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let ticket of tickets">
+              <td>
+                <strong>{{ ticket.title }}</strong>
+                <span>{{ ticket.createdAtUtc | date: 'dd/MM/yyyy HH:mm' }}</span>
+              </td>
+              <td><span class="pill" [ngClass]="'priority-' + ticket.priority">{{ priorityLabel(ticket.priority) }}</span></td>
+              <td><span class="pill" [ngClass]="'status-' + ticket.status">{{ statusLabel(ticket.status) }}</span></td>
+              <td>{{ ticket.requesterName }}</td>
+              <td>{{ ticket.departmentName }}</td>
+              <td>{{ ticket.assignedAgentName || '-' }}</td>
+              <td class="actions">
+                <button type="button" title="Atender" (click)="changeStatus(ticket, 'InProgress')">Atender</button>
+                <button type="button" title="Resolver" (click)="changeStatus(ticket, 'Resolved')">Resolver</button>
+                <button type="button" title="Fechar" (click)="changeStatus(ticket, 'Closed')">Fechar</button>
+              </td>
+            </tr>
+            <tr *ngIf="!tickets.length && !loading">
+              <td colspan="7" class="empty">Nenhum chamado encontrado.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <footer class="statusbar" [class.loading]="loading">{{ loading ? 'Carregando...' : message }}</footer>
+    </section>
+  </section>
+</main>

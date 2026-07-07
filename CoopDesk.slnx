@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/backend/">
+    <Project Path="backend/CoopDesk.Api/CoopDesk.Api.csproj" />
+    <Project Path="backend/CoopDesk.Application/CoopDesk.Application.csproj" />
+    <Project Path="backend/CoopDesk.Domain/CoopDesk.Domain.csproj" />
+    <Project Path="backend/CoopDesk.Infrastructure/CoopDesk.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/desktop/">
+    <Project Path="desktop/CoopDesk.Legacy.WinForms/CoopDesk.Legacy.WinForms.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/CoopDesk.Tests/CoopDesk.Tests.csproj" />
+  </Folder>
+</Solution>

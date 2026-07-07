@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/TestResults/
+
+frontend/coopdesk-web/node_modules/
+frontend/coopdesk-web/dist/
+frontend/coopdesk-web/.angular/
+
+*.user
+*.suo
+*.log

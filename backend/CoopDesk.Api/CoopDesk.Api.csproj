@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CoopDesk.Application\CoopDesk.Application.csproj" />
+    <ProjectReference Include="..\CoopDesk.Infrastructure\CoopDesk.Infrastructure.csproj" />
+    <ProjectReference Include="..\CoopDesk.Domain\CoopDesk.Domain.csproj" />
+  </ItemGroup>
+
+</Project>
