@@ -83,9 +83,10 @@ builder.Services.AddInfrastructure(connectionString);
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+var applyMigrationsOnStartup = builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", app.Environment.IsDevelopment());
+if (applyMigrationsOnStartup)
 {
-    await TryEnsureDatabaseAsync(app);
+    await TryMigrateDatabaseAsync(app);
 }
 
 app.UseMiddleware<ExceptionHandlingMiddleware>();
@@ -97,25 +98,30 @@ app.MapControllers();
 
 await app.RunAsync();
 
-static async Task TryEnsureDatabaseAsync(WebApplication app)
+static async Task TryMigrateDatabaseAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<CoopDeskDbContext>();
 
     try
     {
-        await dbContext.Database.EnsureCreatedAsync();
-        _ = await dbContext.Users.AsNoTracking().AnyAsync();
-        _ = await dbContext.Tickets.AsNoTracking().OrderBy(ticket => ticket.Id).Select(ticket => ticket.ProblemType).FirstOrDefaultAsync();
+        await dbContext.Database.MigrateAsync();
     }
     catch (Exception exception)
     {
-        app.Logger.LogWarning(exception, "Database was not created automatically or has an old schema. Trying to recreate the development database.");
+        app.Logger.LogWarning(exception, "Database migration failed.");
+
+        if (!app.Environment.IsDevelopment())
+        {
+            throw;
+        }
+
+        app.Logger.LogWarning("Trying to recreate the development database because the local schema may be old.");
 
         try
         {
             await dbContext.Database.EnsureDeletedAsync();
-            await dbContext.Database.EnsureCreatedAsync();
+            await dbContext.Database.MigrateAsync();
         }
         catch (Exception recreationException)
         {

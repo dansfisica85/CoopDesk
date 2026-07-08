@@ -61,6 +61,7 @@ Variaveis da API:
 
 ```text
 ConnectionStrings__CoopDesk=<connection-string-do-banco>
+Database__ApplyMigrationsOnStartup=true
 Jwt__Issuer=CoopDesk.Api
 Jwt__Audience=CoopDesk.Clients
 Jwt__SigningKey=<segredo-longo-e-aleatorio>
@@ -71,6 +72,20 @@ Cors__AllowedOrigins__0=https://seu-front.vercel.app
 ## Banco
 
 O projeto principal usa SQL Server/LocalDB porque a vaga pede SQL Server.
+
+As migrations do Entity Framework ficam em:
+
+```text
+backend/CoopDesk.Infrastructure/Persistence/Migrations
+```
+
+Em ambiente de demo, a API pode aplicar migrations na inicializacao usando:
+
+```text
+Database__ApplyMigrationsOnStartup=true
+```
+
+Em producao critica, o ideal e executar migrations como etapa separada de release.
 
 Para demo online, as opcoes mais coerentes sao:
 
